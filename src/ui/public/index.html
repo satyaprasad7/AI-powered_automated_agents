@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic Web Tester</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --fg: #17191c; --muted: #646a73; --line: #e1e4e8; --soft: #f0f2f5;
+    --accent: #3056d3; --accent-fg: #ffffff; --ok: #1d7a4b; --ok-bg: #e2f4ea; --bad: #b42318; --bad-bg: #fde8e6;
+    --warn: #8a5a00; --warn-bg: #fdf1d6; --run: #3056d3; --run-bg: #e6ecfd;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121315; --card: #1b1d20; --fg: #eceef1; --muted: #9aa0a8; --line: #2d3035; --soft: #23262a;
+      --accent: #7d9bff; --accent-fg: #0d1020; --ok: #6fd3a0; --ok-bg: #16352a; --bad: #ff8b80; --bad-bg: #3b1a17;
+      --warn: #f3c66e; --warn-bg: #372a0f; --run: #9db3ff; --run-bg: #1d2645;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 28px 16px 80px; }
+  h1 { font-size: 24px; margin: 0; }
+  .sub { color: var(--muted); margin: 4px 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .url-row { display: flex; gap: 10px; }
+  .url-row input { flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); }
+  .url-row input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 11px 20px; cursor: pointer; background: var(--accent); color: var(--accent-fg); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost { background: var(--soft); color: var(--fg); }
+  button.danger { background: var(--bad-bg); color: var(--bad); }
+  .hint { font-size: 13px; color: var(--muted); }
+  .hint a { color: var(--accent); cursor: pointer; }
+  fieldset { border: 0; padding: 0; margin: 18px 0 0; }
+  legend { font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 8px; }
+  .suites { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; }
+  .suite { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; cursor: pointer; }
+  .suite:has(input:checked) { border-color: var(--accent); background: var(--run-bg); }
+  .suite input { margin-top: 4px; accent-color: var(--accent); }
+  .suite b { display: block; font-size: 14px; }
+  .suite span { font-size: 12.5px; color: var(--muted); }
+  textarea { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); resize: vertical; }
+  .options { display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: center; }
+  .options label { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+  select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg label { padding: 6px 12px; cursor: pointer; gap: 0; }
+  .seg input { display: none; }
+  .seg label:has(input:checked) { background: var(--accent); color: var(--accent-fg); }
+  .banner { border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 14px; }
+  .banner.warn { background: var(--warn-bg); color: var(--warn); }
+  .banner.err { background: var(--bad-bg); color: var(--bad); }
+  code { font-size: 13px; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+
+  #results { margin-top: 24px; }
+  .overall { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .overall .bar { flex: 1; min-width: 180px; height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .overall .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .overall .stat { font-size: 14px; color: var(--muted); }
+  .overall .stat b { color: var(--fg); }
+  .tasks { display: grid; gap: 14px; }
+  .task { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .task-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .task-head h3 { margin: 0; font-size: 16px; flex: 1; min-width: 180px; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--soft); color: var(--muted); }
+  .pill { font-size: 12px; font-weight: 700; letter-spacing: .03em; padding: 3px 10px; border-radius: 99px; text-transform: uppercase; background: var(--soft); color: var(--muted); }
+  .pill.running { background: var(--run-bg); color: var(--run); }
+  .pill.success { background: var(--ok-bg); color: var(--ok); }
+  .pill.failure, .pill.error { background: var(--bad-bg); color: var(--bad); }
+  .pill.blocked, .pill.incomplete, .pill.cancelled { background: var(--warn-bg); color: var(--warn); }
+  .pill.running::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 6px; animation: pulse 1s infinite alternate; }
+  @keyframes pulse { from { opacity: .3 } to { opacity: 1 } }
+  .task-body { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; margin-top: 12px; }
+  @media (max-width: 760px) { .task-body { grid-template-columns: 1fr; } .shot-slot { max-width: 360px; } .url-row { flex-direction: column; } }
+  .now { font-size: 14px; color: var(--muted); margin: 0 0 8px; overflow-wrap: anywhere; }
+  .summary { margin: 0 0 10px; }
+  .checks { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 6px; }
+  .checks li { display: grid; grid-template-columns: 44px 1fr; gap: 8px; font-size: 14px; }
+  .checks .ev { grid-column: 2; font-size: 12.5px; color: var(--muted); margin-top: -4px; }
+  .mark { font-size: 11px; font-weight: 700; text-align: center; border-radius: 5px; padding: 1px 0; height: fit-content; }
+  .mark.p { background: var(--ok-bg); color: var(--ok); } .mark.f { background: var(--bad-bg); color: var(--bad); }
+  details { margin-top: 8px; font-size: 13.5px; }
+  summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+  pre { white-space: pre-wrap; word-break: break-word; background: var(--soft); border-radius: 8px; padding: 10px; font-size: 12.5px; max-height: 360px; overflow: auto; margin: 8px 0 0; }
+  .steps { list-style: none; margin: 8px 0 0; padding: 0; max-height: 260px; overflow: auto; font-size: 13px; }
+  .steps li { display: flex; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
+  .steps .n { color: var(--muted); min-width: 22px; text-align: right; }
+  .steps .x { color: var(--bad); font-weight: 700; }
+  .steps .io { color: var(--muted); overflow-wrap: anywhere; }
+  .shot { width: 100%; border: 1px solid var(--line); border-radius: 8px; display: block; aspect-ratio: 1280 / 900; object-fit: cover; object-position: top; background: var(--soft); }
+  .shot-empty { display: grid; place-items: center; font-size: 13px; color: var(--muted); }
+  .links { display: flex; gap: 12px; margin-top: 10px; font-size: 14px; }
+  .links a { color: var(--accent); font-weight: 600; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .tab { background: none; color: var(--muted); border-radius: 0; padding: 8px 14px; border-bottom: 2px solid transparent; }
+  .tab.on { color: var(--fg); border-bottom-color: var(--accent); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .stat-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .stat-card h3 { margin: 0 0 6px; font-size: 14px; text-transform: capitalize; }
+  .stat-card .nums { display: grid; grid-template-columns: repeat(4, auto); gap: 4px 14px; font-size: 12.5px; color: var(--muted); }
+  .stat-card .nums b { display: block; font-size: 17px; color: var(--fg); }
+  .filters { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; padding: 14px 16px; }
+  .filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+  .filters .grow { flex: 1; min-width: 180px; }
+  .filters input { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); }
+  .filters button { padding: 7px 14px; }
+  .history { display: grid; gap: 12px; margin-top: 14px; }
+  .session { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .session > summary { list-style: none; cursor: pointer; padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; color: var(--fg); font-weight: 400; }
+  .session > summary::-webkit-details-marker { display: none; }
+  .session .when { font-weight: 600; }
+  .session .url { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+  .session .right { text-align: right; font-size: 13px; color: var(--muted); }
+  .session .right b { color: var(--fg); }
+  .session .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .session .actions { display: flex; gap: 14px; justify-content: flex-end; margin-top: 6px; font-size: 13px; font-weight: 600; }
+  .session .actions a, .linkbtn { color: var(--accent); background: none; padding: 0; font-weight: 600; font-size: 13px; }
+  .runs-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .runs-wrap { overflow-x: auto; border-top: 1px solid var(--line); }
+  .runs-table th, .runs-table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .runs-table th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .runs-table a { color: var(--accent); font-weight: 600; }
+  .tools { font-size: 12px; color: var(--muted); }
+  .empty { text-align: center; color: var(--muted); padding: 40px 16px; }
+  @media (max-width: 760px) { .session > summary { grid-template-columns: 1fr; } .session .right, .session .actions { text-align: left; justify-content: flex-start; } }
+  dialog { border: 0; border-radius: 14px; padding: 0; max-width: 520px; width: calc(100% - 32px); background: var(--card); color: var(--fg); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+  dialog::backdrop { background: rgba(10, 12, 16, .55); }
+  .dlg { padding: 20px; }
+  .dlg h2 { margin: 0 0 6px; font-size: 18px; }
+  .dlg .action { font-weight: 600; background: var(--warn-bg); color: var(--warn); padding: 10px 12px; border-radius: 8px; margin: 12px 0; overflow-wrap: anywhere; }
+  .dlg img { width: 100%; border-radius: 8px; border: 1px solid var(--line); }
+  .dlg .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Agentic Web Tester</h1>
+  <p class="sub">Paste a link. Claude drives a real browser (Playwright or Puppeteer) to explore, test forms, extract data and check accessibility, then reports back.</p>
+
+  <div id="banner"></div>
+
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" class="tab on" data-view="new" aria-selected="true">New test</button>
+    <button type="button" role="tab" class="tab" data-view="history" aria-selected="false">History</button>
+  </nav>
+
+  <div id="view-new">
+  <form id="form" class="card" autocomplete="off">
+    <div class="url-row">
+      <input id="url" type="url" required placeholder="https://your-site.example.com/page" aria-label="URL to test">
+      <button id="run" type="submit">Run tests</button>
+    </div>
+    <div class="hint" style="margin-top:8px">Only test sites you own or are authorized to test. No site handy? <a id="demo">Use the local demo site</a>.</div>
+
+    <fieldset>
+      <legend>Test suites</legend>
+      <div class="suites">
+        <label class="suite"><input type="checkbox" name="suite" value="explore" checked><div><b>Exploration &amp; smoke test</b><span>Visits key pages, finds broken pages and errors</span></div></label>
+        <label class="suite"><input type="checkbox" name="suite" value="forms" checked><div><b>Form &amp; input validation</b><span>Negative tests: required fields, bad emails, ranges</span></div></label>
+        <label class="suite"><input type="checkbox" name="suite" value="extract" checked><div><b>Structured data extraction</b><span>Tables, listings, key facts and contacts as JSON</span></div></label>
+        <label class="suite"><input type="checkbox" name="suite" value="a11y" checked><div><b>Accessibility &amp; content</b><span>Alt text, labels, headings, meta tags, a score</span></div></label>
+        <label class="suite"><input type="checkbox" name="suite" value="detection" checked><div><b>Bot, anti-detect &amp; VM detection</b><span>Visits as a plain bot, a virtual machine and an anti-detect browser: does the site flag each?</span></div></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Custom goal (optional)</legend>
+      <textarea id="goal" rows="2" placeholder="e.g. Search for 'laptop', open the first result and verify the price and 'Add to cart' button are shown"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Options</legend>
+      <div class="options">
+        <label>Browser engine
+          <span class="seg">
+            <label><input type="radio" name="driver" value="playwright" checked>Playwright</label>
+            <label><input type="radio" name="driver" value="puppeteer">Puppeteer</label>
+            <label><input type="radio" name="driver" value="both">Both</label>
+          </span>
+        </label>
+        <label>Effort
+          <select id="effort"><option value="low">Low (fast, cheap)</option><option value="medium" selected>Medium</option><option value="high">High (thorough)</option></select>
+        </label>
+        <label><input type="checkbox" id="allowSubmit"> Allow form submissions without asking</label>
+        <label><input type="checkbox" id="headed"> Show browser window</label>
+      </div>
+      <p class="hint" style="margin:8px 0 0">Submit-like clicks ask for your approval unless you allow submissions. Payment and delete actions always ask.</p>
+    </fieldset>
+  </form>
+
+  <section id="results" hidden>
+    <div class="overall">
+      <div class="bar"><i id="bar"></i></div>
+      <span class="stat"><b id="done">0</b> / <b id="total">0</b> tasks</span>
+      <span class="stat">Cost <b id="cost">$0.000</b></span>
+      <button id="cancel" class="danger" type="button">Cancel</button>
+    </div>
+    <div id="info" class="hint"></div>
+    <div id="tasks" class="tasks"></div>
+  </section>
+  </div>
+
+  <section id="view-history" hidden>
+    <div id="engineStats" class="stats"></div>
+    <div class="filters card">
+      <label>Engine <select id="fEngine"><option value="">All</option><option value="playwright">Playwright</option><option value="puppeteer">Puppeteer</option></select></label>
+      <label>Suite <select id="fCategory"><option value="">All</option></select></label>
+      <label>Status <select id="fStatus"><option value="">All</option><option value="success">Success</option><option value="failure">Failure</option><option value="blocked">Blocked</option><option value="error">Error</option><option value="incomplete">Incomplete</option></select></label>
+      <label>Source <select id="fSource"><option value="">All</option><option value="ui">Web UI</option><option value="cli">Command line</option></select></label>
+      <label class="grow">Search <input id="fText" type="search" placeholder="URL or task name"></label>
+      <button type="button" class="ghost" id="hRefresh">Refresh</button>
+    </div>
+    <div id="historyList" class="history"></div>
+  </section>
+</main>
+
+<dialog id="approval">
+  <div class="dlg">
+    <h2>Approval needed</h2>
+    <div class="hint" id="apWho"></div>
+    <div class="action" id="apAction"></div>
+    <img id="apShot" alt="Latest screenshot before the action" hidden>
+    <div class="row">
+      <button class="ghost" id="apDeny" type="button">Deny</button>
+      <button id="apAllow" type="button">Allow</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const state = { jobId: null, es: null, tasks: new Map(), done: 0, cost: 0, approvals: [] };
+
+async function init() {
+  const status = await fetch('/api/status').then((r) => r.json());
+  if (!status.hasCredentials) {
+    $('banner').innerHTML = '<div class="banner warn"><b>No Anthropic API key found.</b> Add <code>ANTHROPIC_API_KEY=…</code> to the <code>.env</code> file in the project folder and restart <code>npm run ui</code>. (Skip this if you signed in with <code>ant auth login</code>.)</div>';
+  }
+  $('demo').onclick = () => { $('url').value = status.demoUrl; $('url').focus(); };
+  const resume = status.activeJob || sessionStorage.getItem('jobId');
+  if (resume) attach(resume);
+}
+
+$('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const suites = [...document.querySelectorAll('input[name=suite]:checked')].map((i) => i.value);
+  const goal = $('goal').value.trim();
+  if (goal) suites.push('custom');
+  if (!suites.length) return showError('Pick at least one suite or enter a custom goal.');
+  const driver = document.querySelector('input[name=driver]:checked').value;
+  const body = {
+    url: $('url').value.trim(), suites, customGoal: goal || undefined,
+    drivers: driver === 'both' ? ['playwright', 'puppeteer'] : [driver],
+    effort: $('effort').value, allowSubmissions: $('allowSubmit').checked, headed: $('headed').checked,
+  };
+  $('run').disabled = true;
+  const res = await fetch('/api/jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const out = await res.json();
+  if (!res.ok) { $('run').disabled = false; return showError(out.error); }
+  sessionStorage.setItem('jobId', out.id);
+  attach(out.id);
+});
+
+function showError(msg) {
+  $('banner').innerHTML = `<div class="banner err">${esc(msg)}</div>`;
+  setTimeout(() => { if ($('banner').querySelector('.err')) $('banner').innerHTML = ''; }, 8000);
+}
+
+function attach(jobId) {
+  state.es?.close();
+  Object.assign(state, { jobId, tasks: new Map(), done: 0, cost: 0, approvals: [] });
+  $('tasks').innerHTML = ''; $('info').textContent = '';
+  $('results').hidden = false; $('run').disabled = true; $('cancel').hidden = false; $('cancel').disabled = false;
+  const es = new EventSource(`/api/jobs/${jobId}/events`);
+  state.es = es;
+  es.onmessage = (m) => handle(JSON.parse(m.data));
+  es.onerror = () => {
+    if (es.readyState !== EventSource.CLOSED && state.running) return; // transient drop: the browser reconnects
+    if (state.tasks.size === 0) { $('results').hidden = true; sessionStorage.removeItem('jobId'); }
+    finish();
+  };
+  state.running = true;
+}
+
+function finish() {
+  state.es?.close(); state.running = false;
+  $('run').disabled = false; $('cancel').hidden = true;
+}
+
+function handle(ev) {
+  switch (ev.type) {
+    case 'plan':
+      // Also runs on reconnect, when the server replays the whole event history.
+      Object.assign(state, { tasks: new Map(), done: 0, cost: 0 });
+      $('tasks').innerHTML = '';
+      $('url').value ||= ev.url;
+      $('total').textContent = ev.items.length;
+      for (const item of ev.items) addTask(item);
+      break;
+    case 'info': $('info').textContent = ev.message; break;
+    case 'task-start': setStatus(ev.key, 'running'); break;
+    case 'log': {
+      const t = state.tasks.get(ev.key);
+      if (t && ev.message.trim().startsWith('claude:')) t.el.querySelector('.now').textContent = ev.message.trim().replace(/^claude:\s*/, '💬 ');
+      break;
+    }
+    case 'step': addStep(ev.key, ev.step, ev.checks); break;
+    case 'screenshot': setShot(ev.key, ev.screenshot); break;
+    case 'task-end': endTask(ev.key, ev.result); break;
+    case 'approval': queueApproval(ev); break;
+    case 'approval-resolved': resolveApprovalUI(ev.id); break;
+    case 'fatal': showError(ev.message); finish(); break;
+    case 'done':
+      $('info').innerHTML = esc(ev.cancelled ? 'Run cancelled.' : 'All tasks finished.') +
+        (ev.summary ? ` <a href="${ev.summary}" target="_blank">Open session summary ↗</a> · <a class="linkbtn" href="#" data-goto-history>View in history</a>` : '');
+      finish();
+      break;
+  }
+}
+
+function addTask(item) {
+  const el = document.createElement('article');
+  el.className = 'task';
+  el.innerHTML = `
+    <div class="task-head"><h3>${esc(item.title)}</h3><span class="chip">${esc(item.driver)}</span><span class="pill">queued</span></div>
+    <div class="task-body">
+      <div>
+        <p class="now">Waiting to start…</p>
+        <p class="summary" hidden></p>
+        <ul class="checks"></ul>
+        <details class="steps-wrap" hidden><summary>Steps (<span class="count">0</span>)</summary><ul class="steps"></ul></details>
+        <details class="data-wrap" hidden><summary>Extracted data</summary><pre></pre></details>
+        <div class="links"></div>
+      </div>
+      <div class="shot-slot"><div class="shot shot-empty">Waiting for the browser…</div></div>
+    </div>`;
+  $('tasks').append(el);
+  state.tasks.set(item.key, { el, item });
+}
+
+function setStatus(key, status) {
+  const pill = state.tasks.get(key)?.el.querySelector('.pill');
+  if (pill) { pill.className = `pill ${status}`; pill.textContent = status; }
+  if (status === 'running') state.tasks.get(key).el.querySelector('.now').textContent = 'Opening the browser…';
+}
+
+function renderChecks(el, checks) {
+  el.querySelector('.checks').innerHTML = (checks || []).map((c) =>
+    `<li><span class="mark ${c.passed ? 'p' : 'f'}">${c.passed ? 'PASS' : 'FAIL'}</span><span>${esc(c.name)}</span><span class="ev">${esc(c.evidence)}</span></li>`).join('');
+}
+
+function addStep(key, step, checks) {
+  const t = state.tasks.get(key); if (!t) return;
+  const el = t.el;
+  const input = JSON.stringify(step.input);
+  const li = document.createElement('li');
+  li.innerHTML = `<span class="n">${step.index}</span>${step.ok ? '' : '<span class="x">✗</span>'}<b>${esc(step.tool)}</b><span class="io">${esc(input === '{}' ? '' : input.slice(0, 140))}</span>`;
+  el.querySelector('.steps').prepend(li);
+  el.querySelector('.steps-wrap').hidden = false;
+  el.querySelector('.count').textContent = step.index;
+  el.querySelector('.now').textContent = `Step ${step.index}: ${step.tool} · ${step.url}`;
+  if (step.screenshot) setShot(key, step.screenshot);
+  renderChecks(el, checks);
+}
+
+function setShot(key, src) {
+  const el = state.tasks.get(key)?.el; if (!el) return;
+  el.querySelector('.shot-slot').innerHTML = `<a href="${src}" target="_blank"><img class="shot" src="${src}" alt="Latest browser screenshot"></a>`;
+}
+
+function endTask(key, r) {
+  const t = state.tasks.get(key); if (!t) return;
+  const el = t.el;
+  setStatus(key, r.status);
+  el.querySelector('.now').textContent = r.steps != null ? `${r.steps} steps · ${(r.durationMs / 1000).toFixed(1)} s · $${(r.costUsd || 0).toFixed(3)}` : '';
+  const summary = el.querySelector('.summary');
+  summary.hidden = false; summary.textContent = r.summary + (r.error ? ` (${r.error})` : '');
+  renderChecks(el, r.checks);
+  if (r.data !== null && r.data !== undefined) {
+    el.querySelector('.data-wrap').hidden = false;
+    el.querySelector('.data-wrap pre').textContent = typeof r.data === 'string' ? r.data : JSON.stringify(r.data, null, 2);
+  }
+  if (r.report) el.querySelector('.links').innerHTML = `<a href="${r.report}" target="_blank">Open full report ↗</a>`;
+  state.done += 1; state.cost += r.costUsd || 0;
+  $('done').textContent = state.done;
+  $('cost').textContent = '$' + state.cost.toFixed(3);
+  $('bar').style.width = (100 * state.done / Math.max(1, state.tasks.size)) + '%';
+}
+
+// Approvals ------------------------------------------------------------
+function queueApproval(ev) { state.approvals.push(ev); if (state.approvals.length === 1) showApproval(); }
+function showApproval() {
+  const ev = state.approvals[0]; if (!ev) return;
+  $('apWho').textContent = `${ev.title} · ${ev.driver}`;
+  $('apAction').textContent = `The agent wants to ${ev.action}`;
+  $('apShot').hidden = !ev.screenshot; if (ev.screenshot) $('apShot').src = ev.screenshot;
+  if (!$('approval').open) $('approval').showModal();
+}
+function resolveApprovalUI(id) {
+  state.approvals = state.approvals.filter((a) => a.id !== id);
+  if (state.approvals.length) showApproval(); else if ($('approval').open) $('approval').close();
+}
+async function answer(approved) {
+  const ev = state.approvals[0]; if (!ev) return;
+  await fetch(`/api/jobs/${state.jobId}/approvals/${ev.id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ approved }) });
+}
+$('apAllow').onclick = () => answer(true);
+$('apDeny').onclick = () => answer(false);
+$('approval').addEventListener('cancel', (e) => { e.preventDefault(); answer(false); });
+
+$('cancel').onclick = async () => {
+  $('cancel').disabled = true;
+  await fetch(`/api/jobs/${state.jobId}/cancel`, { method: 'POST' });
+};
+
+// History ----------------------------------------------------------------
+const hist = { jobs: [] }; // not 'history': that would shadow window.history
+const fmtTime = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+const pillFor = (s) => `<span class="pill ${esc(s)}">${esc(s)}</span>`;
+
+function showView(view) {
+  document.querySelectorAll('.tab').forEach((t) => { const on = t.dataset.view === view; t.classList.toggle('on', on); t.setAttribute('aria-selected', on); });
+  $('view-new').hidden = view !== 'new';
+  $('view-history').hidden = view !== 'history';
+  if (view === 'history') loadHistory();
+}
+document.querySelectorAll('.tab').forEach((t) => (t.onclick = () => showView(t.dataset.view)));
+document.addEventListener('click', (e) => { if (e.target.closest('[data-goto-history]')) { e.preventDefault(); showView('history'); } });
+
+async function loadHistory() {
+  $('historyList').innerHTML = '<div class="empty">Loading…</div>';
+  const data = await fetch('/api/history').then((r) => r.json());
+  hist.jobs = data.jobs;
+  const cats = [...new Set(hist.jobs.flatMap((j) => j.runs.map((r) => r.category)))].sort();
+  const current = $('fCategory').value;
+  $('fCategory').innerHTML = '<option value="">All</option>' + cats.map((c) => `<option ${c === current ? 'selected' : ''}>${esc(c)}</option>`).join('');
+  renderHistory();
+}
+
+function runMatches(r, job) {
+  const f = { engine: $('fEngine').value, cat: $('fCategory').value, status: $('fStatus').value, source: $('fSource').value, text: $('fText').value.trim().toLowerCase() };
+  if (f.engine && r.driver !== f.engine) return false;
+  if (f.cat && r.category !== f.cat) return false;
+  if (f.status && r.status !== f.status) return false;
+  if (f.source && job.source !== f.source) return false;
+  if (f.text && !`${r.startUrl} ${r.taskName} ${job.urls.join(' ')}`.toLowerCase().includes(f.text)) return false;
+  return true;
+}
+
+function renderEngineStats(runs) {
+  const engines = ['playwright', 'puppeteer'];
+  $('engineStats').innerHTML = engines.map((e) => {
+    const rs = runs.filter((r) => r.driver === e);
+    const passed = rs.filter((r) => r.status === 'success').length;
+    const avg = rs.length ? rs.reduce((s, r) => s + r.durationMs, 0) / rs.length / 1000 : 0;
+    const cost = rs.reduce((s, r) => s + r.costUsd, 0);
+    return `<div class="stat-card"><h3>${e}</h3><div class="nums">
+      <span>Runs<b>${rs.length}</b></span><span>Pass rate<b>${rs.length ? Math.round((100 * passed) / rs.length) + '%' : '–'}</b></span>
+      <span>Avg time<b>${rs.length ? avg.toFixed(0) + 's' : '–'}</b></span><span>Cost<b>$${cost.toFixed(2)}</b></span></div></div>`;
+  }).join('');
+}
+
+function renderHistory() {
+  const visible = hist.jobs.map((job) => ({ job, runs: job.runs.filter((r) => runMatches(r, job)) })).filter((x) => x.runs.length);
+  renderEngineStats(visible.flatMap((x) => x.runs));
+  if (!visible.length) {
+    $('historyList').innerHTML = `<div class="empty card">${hist.jobs.length ? 'No runs match these filters.' : 'No runs yet. Start one from the New test tab.'}</div>`;
+    return;
+  }
+  $('historyList').innerHTML = visible.map(({ job, runs }, i) => {
+    const passed = runs.filter((r) => r.status === 'success').length;
+    const cost = runs.reduce((s, r) => s + r.costUsd, 0);
+    const engines = [...new Set(runs.map((r) => r.driver))];
+    const rows = runs.map((r) => {
+      const tools = Object.entries(r.toolUsage || {}).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([t, n]) => `${esc(t)} ×${n}`).join(', ');
+      return `<tr>
+        <td><a href="${r.report}" target="_blank">${esc(r.taskName)}</a><div class="tools">${esc(r.summary).slice(0, 160)}</div></td>
+        <td>${esc(r.driver)}${r.profile && r.profile !== 'default' ? `<div class="tools">profile: ${esc(r.profile)}</div>` : ''}</td>
+        <td>${pillFor(r.status)}</td>
+        <td>${r.checksPassed}/${r.checksTotal}</td>
+        <td>${r.steps}<div class="tools">${tools}</div></td>
+        <td>${(r.durationMs / 1000).toFixed(1)}s</td>
+        <td>$${r.costUsd.toFixed(3)}</td>
+      </tr>`;
+    }).join('');
+    return `<details class="session" ${i === 0 ? 'open' : ''}>
+      <summary>
+        <div>
+          <div class="when">${fmtTime(job.startedAt)} ${job.running ? pillFor('running') : ''}</div>
+          <div class="url">${esc(job.urls.join(', ')) || 'URL not recorded (older run)'}</div>
+          <div class="chips"><span class="chip">${job.source === 'ui' ? 'Web UI' : 'Command line'}</span>${engines.map((e) => `<span class="chip">${esc(e)}</span>`).join('')}</div>
+        </div>
+        <div>
+          <div class="right"><b>${passed}/${runs.length}</b> passed · <b>$${cost.toFixed(3)}</b></div>
+          <div class="actions">
+            ${job.summaryReport ? `<a href="${job.summaryReport}" target="_blank">Session summary ↗</a>` : ''}
+            ${job.urls.length === 1 ? `<button type="button" class="linkbtn" data-rerun="${esc(job.jobId)}">Run again</button>` : ''}
+          </div>
+        </div>
+      </summary>
+      <div class="runs-wrap"><table class="runs-table">
+        <tr><th>Task</th><th>Engine</th><th>Status</th><th>Checks</th><th>Steps / tools</th><th>Time</th><th>Cost</th></tr>${rows}
+      </table></div>
+    </details>`;
+  }).join('');
+}
+
+['fEngine', 'fCategory', 'fStatus', 'fSource'].forEach((id) => ($(id).onchange = renderHistory));
+$('fText').oninput = renderHistory;
+$('hRefresh').onclick = loadHistory;
+
+// "Run again": prefill the New test form from a past session.
+$('historyList').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-rerun]'); if (!btn) return;
+  e.preventDefault();
+  const job = hist.jobs.find((j) => j.jobId === btn.dataset.rerun); if (!job) return;
+  $('url').value = job.urls[0];
+  if (job.suites?.length && job.source === 'ui') {
+    document.querySelectorAll('input[name=suite]').forEach((i) => (i.checked = job.suites.includes(i.value)));
+  }
+  const drivers = job.drivers?.length ? job.drivers : [...new Set(job.runs.map((r) => r.driver))];
+  const d = drivers.length > 1 ? 'both' : drivers[0];
+  const radio = document.querySelector(`input[name=driver][value=${d}]`); if (radio) radio.checked = true;
+  showView('new');
+  $('url').focus();
+});
+
+init();
+</script>
+</body>
+</html>

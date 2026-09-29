@@ -1,0 +1,29 @@
+{
+  "name": "agentic-browser-automation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LLM-driven browser agents (Claude + Playwright/Puppeteer) for testing, form submission, data extraction, workflow execution and validation.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "ui": "tsx src/ui/server.ts",
+    "agent": "tsx src/cli.ts",
+    "demo": "tsx demo-site/server.ts",
+    "smoke": "tsx src/smoke.ts",
+    "typecheck": "tsc --noEmit",
+    "setup:browsers": "playwright install chromium"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.129.0",
+    "playwright": "^1.63.0",
+    "puppeteer": "^25.12.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "Register a new business account",
+  "category": "form-submission",
+  "driver": "playwright",
+  "startUrl": "http://127.0.0.1:4173/register.html",
+  "goal": "Register a new business account using the input data and capture the confirmation number the portal returns.",
+  "inputs": {
+    "fullName": "Jane Doe",
+    "email": "jane.doe@acme-demo.test",
+    "company": "Acme Demo Ltd",
+    "plan": "Enterprise",
+    "seats": "25",
+    "acceptTerms": "yes"
+  },
+  "successCriteria": [
+    "Every form field matches the input data before submitting",
+    "The portal shows a registration-complete message with a confirmation number"
+  ],
+  "outputSchema": {
+    "type": "object",
+    "properties": { "confirmation": { "type": "string" } },
+    "required": ["confirmation"]
+  },
+  "allowedDomains": ["127.0.0.1"],
+  "maxSteps": 20
+}

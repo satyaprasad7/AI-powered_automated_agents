@@ -1,0 +1,29 @@
+{
+  "name": "Submit a meals expense claim",
+  "category": "workflow",
+  "driver": "playwright",
+  "startUrl": "http://127.0.0.1:4173/expenses.html",
+  "goal": "Complete the three-step expense claim workflow with the input data, review the summary against the input, submit it, and return the claim ID and status.",
+  "inputs": {
+    "employeeId": "E-10234",
+    "costCenter": "CC-200 Sales",
+    "purpose": "Client dinner - Q4 renewal, Globex",
+    "date": "2026-09-15",
+    "category": "Meals",
+    "amountUsd": "92.40",
+    "justification": "Dinner with three Globex stakeholders to close the Q4 renewal."
+  },
+  "successCriteria": [
+    "A justification field appears because the meal exceeds $75, and it is filled",
+    "The review page shows every value exactly as in the input data",
+    "The portal confirms submission with a claim ID"
+  ],
+  "outputSchema": {
+    "type": "object",
+    "properties": { "claimId": { "type": "string" }, "status": { "type": "string" } },
+    "required": ["claimId", "status"]
+  },
+  "allowedDomains": ["127.0.0.1"],
+  "maxSteps": 25,
+  "requireApprovalFor": ["submit claim"]
+}

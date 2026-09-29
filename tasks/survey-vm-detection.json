@@ -1,0 +1,23 @@
+{
+  "name": "Survey fraud screening: virtual machine respondent",
+  "category": "security",
+  "driver": "playwright",
+  "profile": "vm",
+  "startUrl": "http://127.0.0.1:4173/survey.html",
+  "goal": "Test whether the survey's respondent quality check detects a respondent on a virtual machine. Call fingerprint to see which signals this browser presents, then read the survey's quality-check result and compare the reasons it gives with the simulated signals. Do not try to avoid detection.",
+  "successCriteria": [
+    "The survey detects the automated browser",
+    "The survey identifies the virtual-machine signals (virtual GPU, low CPU/memory, VM screen size)"
+  ],
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "siteReaction": { "type": "string" },
+      "detectedSignals": { "type": "array", "items": { "type": "string" } },
+      "missedSignals": { "type": "array", "items": { "type": "string" } }
+    }
+  },
+  "allowedDomains": ["127.0.0.1"],
+  "maxSteps": 10,
+  "effort": "low"
+}

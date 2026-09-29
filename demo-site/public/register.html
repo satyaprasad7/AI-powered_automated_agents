@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Register · Acme Portal</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header><strong>Acme Portal</strong><a href="/register.html">Register</a><a href="/products.html">Products</a><a href="/expenses.html">Expense claim</a></header>
+  <main>
+    <div class="card">
+      <h1>Create your business account</h1>
+      <form id="reg" novalidate>
+        <label for="fullName">Full name</label>
+        <input id="fullName" name="fullName" type="text" required aria-describedby="fullName-err">
+        <div class="error" id="fullName-err"></div>
+
+        <label for="email">Work email</label>
+        <input id="email" name="email" type="email" required aria-describedby="email-err">
+        <div class="error" id="email-err"></div>
+
+        <label for="company">Company</label>
+        <input id="company" name="company" type="text">
+
+        <label for="plan">Plan</label>
+        <select id="plan" name="plan">
+          <option value="starter">Starter</option>
+          <option value="professional">Professional</option>
+          <option value="enterprise">Enterprise</option>
+        </select>
+
+        <label for="seats">Number of seats</label>
+        <input id="seats" name="seats" type="number" min="1" max="500" value="1" aria-describedby="seats-err">
+        <div class="error" id="seats-err"></div>
+
+        <label class="check"><input id="terms" name="terms" type="checkbox" aria-describedby="terms-err"> I accept the terms of service</label>
+        <div class="error" id="terms-err"></div>
+
+        <button type="submit">Create account</button>
+      </form>
+      <div id="result" role="status"></div>
+    </div>
+  </main>
+  <script>
+    // Mirrors the server rule, including its seeded bug (no TLD required).
+    const EMAIL_RE = /^[^@\s]+@[^@\s]+$/;
+    const form = document.getElementById('reg');
+    const result = document.getElementById('result');
+
+    function setError(id, msg) {
+      const el = document.getElementById(id);
+      el.setAttribute('aria-invalid', msg ? 'true' : 'false');
+      document.getElementById(id + '-err').textContent = msg || '';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      result.innerHTML = '';
+      const data = Object.fromEntries(new FormData(form));
+      data.terms = form.terms.checked;
+      data.seats = Number(data.seats);
+      let ok = true;
+      const check = (id, cond, msg) => { setError(id, cond ? '' : msg); ok = ok && cond; };
+      check('fullName', data.fullName.trim().length > 0, 'Full name is required');
+      check('email', EMAIL_RE.test(data.email), 'Enter a valid work email');
+      check('seats', Number.isInteger(data.seats) && data.seats >= 1 && data.seats <= 500, 'Seats must be between 1 and 500');
+      check('terms', data.terms, 'You must accept the terms');
+      if (!ok) {
+        result.innerHTML = '<div class="banner err">Please fix the highlighted fields.</div>';
+        return;
+      }
+      const res = await fetch('/api/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) });
+      const body = await res.json();
+      if (res.ok) {
+        form.hidden = true;
+        result.innerHTML = '<div class="banner ok">Registration complete. Confirmation number: <strong>' + body.confirmation + '</strong></div>' +
+          '<button class="secondary" onclick="location.reload()">Register another account</button>';
+      } else {
+        for (const [k, v] of Object.entries(body.errors || {})) setError(k, v);
+        result.innerHTML = '<div class="banner err">The server rejected the registration.</div>';
+      }
+    });
+  </script>
+</body>
+</html>

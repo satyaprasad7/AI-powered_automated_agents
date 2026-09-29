@@ -1,0 +1,38 @@
+{
+  "name": "Registration form validation test",
+  "category": "testing",
+  "driver": "playwright",
+  "startUrl": "http://127.0.0.1:4173/register.html",
+  "goal": "Run a negative test suite against the registration form. For each test case, start from a fresh form (reload the page, or use 'Register another account' if a registration went through), fill the form with valid baseline data except for the field under test, submit, and verify the form rejects the input with a visible, field-specific error. If a case is accepted, record it as a defect.",
+  "description": "Baseline valid data: full name 'Test User', email 'test.user@acme-demo.test', plan Starter, seats 1, terms accepted.",
+  "successCriteria": [
+    "Empty full name is rejected",
+    "Email 'test.user.acme-demo.test' (missing @) is rejected",
+    "Email 'test.user@acme-demo' (missing top-level domain) is rejected",
+    "Seats value 0 is rejected",
+    "Seats value 501 is rejected",
+    "Submitting without accepting the terms is rejected"
+  ],
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "defects": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "testCase": { "type": "string" },
+            "expected": { "type": "string" },
+            "actual": { "type": "string" },
+            "severity": { "type": "string", "enum": ["low", "medium", "high"] }
+          },
+          "required": ["testCase", "expected", "actual", "severity"]
+        }
+      }
+    },
+    "required": ["defects"]
+  },
+  "allowedDomains": ["127.0.0.1"],
+  "maxSteps": 60,
+  "effort": "medium"
+}

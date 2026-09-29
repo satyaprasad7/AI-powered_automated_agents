@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Customer survey · Acme Portal</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header><strong>Acme Portal</strong><a href="/register.html">Register</a><a href="/products.html">Products</a><a href="/expenses.html">Expense claim</a><a href="/survey.html">Survey</a></header>
+  <main>
+    <div class="card">
+      <h1>Customer satisfaction survey</h1>
+      <div id="screening" role="status" class="banner">Running respondent quality check…</div>
+      <form id="survey" hidden>
+        <label for="q1">How satisfied are you with Acme products?</label>
+        <select id="q1"><option value="">Select…</option><option>Very satisfied</option><option>Satisfied</option><option>Neutral</option><option>Dissatisfied</option></select>
+        <label for="q2">How likely are you to recommend us (0-10)?</label>
+        <input id="q2" type="number" min="0" max="10">
+        <label for="q3">Any other comments?</label>
+        <textarea id="q3" rows="3"></textarea>
+        <button type="submit">Submit survey</button>
+      </form>
+    </div>
+  </main>
+  <script>
+    function collect() {
+      let webglVendor = null, webglRenderer = null;
+      try {
+        const gl = document.createElement('canvas').getContext('webgl');
+        const ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+        if (gl && ext) { webglVendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL); webglRenderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL); }
+      } catch (e) {}
+      return {
+        webdriver: !!navigator.webdriver, userAgent: navigator.userAgent, platform: navigator.platform,
+        uaDataPlatform: navigator.userAgentData ? navigator.userAgentData.platform : null,
+        language: navigator.language, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        cores: navigator.hardwareConcurrency, memory: navigator.deviceMemory || null,
+        screen: screen.width + 'x' + screen.height, webglVendor, webglRenderer,
+      };
+    }
+    (async () => {
+      const res = await fetch('/api/screen', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(collect()) });
+      const r = await res.json();
+      const box = document.getElementById('screening');
+      if (r.verdict === 'flagged') {
+        box.className = 'banner err';
+        box.innerHTML = '<strong>Respondent quality check: FLAGGED</strong> (risk score ' + r.score + ')<br>Survey access blocked. Reasons:<ul>' +
+          r.reasons.map((x) => '<li>' + x + '</li>').join('') + '</ul>';
+      } else {
+        box.className = 'banner ok';
+        box.innerHTML = '<strong>Respondent quality check: PASSED</strong>';
+        document.getElementById('survey').hidden = false;
+      }
+    })();
+    document.getElementById('survey').onsubmit = (e) => { e.preventDefault(); document.querySelector('.card').innerHTML = '<div class="banner ok">Thank you! Your response was recorded.</div>'; };
+  </script>
+</body>
+</html>

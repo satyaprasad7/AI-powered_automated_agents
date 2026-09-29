@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Expense claim · Acme Portal</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header><strong>Acme Portal</strong><a href="/register.html">Register</a><a href="/products.html">Products</a><a href="/expenses.html">Expense claim</a></header>
+  <main>
+    <div class="card">
+      <h1>New expense claim</h1>
+      <div class="steps"><span data-step="1">1. Employee</span>›<span data-step="2">2. Expense</span>›<span data-step="3">3. Review</span></div>
+
+      <section id="step1">
+        <label for="employeeId">Employee ID</label>
+        <input id="employeeId" type="text" placeholder="E-12345" aria-describedby="employeeId-err">
+        <div class="error" id="employeeId-err"></div>
+        <label for="costCenter">Cost center</label>
+        <select id="costCenter">
+          <option value="">Select…</option>
+          <option value="CC-100">CC-100 Engineering</option>
+          <option value="CC-200">CC-200 Sales</option>
+          <option value="CC-300">CC-300 Operations</option>
+        </select>
+        <div class="error" id="costCenter-err"></div>
+        <label for="purpose">Business purpose</label>
+        <input id="purpose" type="text">
+        <button type="button" id="to2">Continue</button>
+      </section>
+
+      <section id="step2" hidden>
+        <label for="date">Expense date</label>
+        <input id="date" type="date" aria-describedby="date-err">
+        <div class="error" id="date-err"></div>
+        <label for="category">Category</label>
+        <select id="category">
+          <option value="travel">Travel</option>
+          <option value="meals">Meals</option>
+          <option value="lodging">Lodging</option>
+          <option value="software">Software</option>
+        </select>
+        <label for="amount">Amount (USD)</label>
+        <input id="amount" type="number" step="0.01" min="0" aria-describedby="amount-err">
+        <div class="error" id="amount-err"></div>
+        <div id="justWrap" hidden>
+          <label for="justification">Justification (required for meals over $75)</label>
+          <textarea id="justification" rows="3" aria-describedby="justification-err"></textarea>
+          <div class="error" id="justification-err"></div>
+        </div>
+        <button type="button" class="secondary" id="back1">Back</button>
+        <button type="button" id="to3">Review claim</button>
+      </section>
+
+      <section id="step3" hidden>
+        <dl id="summary"></dl>
+        <button type="button" class="secondary" id="back2">Back</button>
+        <button type="button" id="submit">Submit claim</button>
+      </section>
+
+      <div id="result" role="status"></div>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const show = (n) => {
+      for (const i of [1, 2, 3]) $('step' + i).hidden = i !== n;
+      document.querySelectorAll('[data-step]').forEach((s) => s.classList.toggle('on', s.dataset.step == n));
+    };
+    const err = (id, msg) => { $(id).setAttribute('aria-invalid', msg ? 'true' : 'false'); $(id + '-err').textContent = msg || ''; return !msg; };
+    const needsJust = () => $('category').value === 'meals' && Number($('amount').value) > 75;
+    const syncJust = () => { $('justWrap').hidden = !needsJust(); };
+    $('category').onchange = syncJust;
+    $('amount').oninput = syncJust;
+
+    $('to2').onclick = () => {
+      const a = err('employeeId', /^E-\d{5}$/.test($('employeeId').value.trim()) ? '' : 'Employee ID must look like E-12345');
+      const b = err('costCenter', $('costCenter').value ? '' : 'Choose a cost center');
+      if (a && b) show(2);
+    };
+    $('back1').onclick = () => show(1);
+    $('to3').onclick = () => {
+      const amt = Number($('amount').value);
+      const a = err('date', $('date').value ? '' : 'Enter the expense date');
+      const b = err('amount', amt > 0 && amt <= 5000 ? '' : 'Amount must be between 0.01 and 5000');
+      const c = !needsJust() || err('justification', $('justification').value.trim().length >= 10 ? '' : 'Justification of at least 10 characters is required');
+      if (!(a && b && c)) return;
+      const rows = [
+        ['Employee ID', $('employeeId').value], ['Cost center', $('costCenter').selectedOptions[0].text],
+        ['Purpose', $('purpose').value || '—'], ['Date', $('date').value],
+        ['Category', $('category').selectedOptions[0].text], ['Amount', '$' + amt.toFixed(2)],
+      ];
+      if (needsJust()) rows.push(['Justification', $('justification').value]);
+      $('summary').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${String(v).replace(/</g, '&lt;')}</dd>`).join('');
+      show(3);
+    };
+    $('back2').onclick = () => show(2);
+    $('submit').onclick = async () => {
+      const payload = {
+        employeeId: $('employeeId').value, costCenter: $('costCenter').value, purpose: $('purpose').value,
+        date: $('date').value, category: $('category').value, amount: Number($('amount').value),
+        justification: $('justification').value,
+      };
+      const res = await fetch('/api/claims', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+      const body = await res.json();
+      $('step3').hidden = true;
+      $('result').innerHTML = `<div class="banner ok">Claim submitted. Claim ID: <strong>${body.claimId}</strong> · Status: ${body.status}</div>`;
+    };
+    show(1);
+  </script>
+</body>
+</html>

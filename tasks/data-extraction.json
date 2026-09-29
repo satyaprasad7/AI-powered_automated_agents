@@ -1,0 +1,36 @@
+{
+  "name": "Extract the product catalogue",
+  "category": "data-extraction",
+  "driver": "puppeteer",
+  "startUrl": "http://127.0.0.1:4173/products.html",
+  "goal": "Extract every product in the catalogue across all pages. Convert price to a number and stock to an integer (0 when the page says 'Out of stock').",
+  "successCriteria": [
+    "Every page of the catalogue was visited",
+    "The number of extracted products equals the total shown across all pages, with no duplicates",
+    "Out-of-stock products are recorded with stock 0"
+  ],
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "products": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "sku": { "type": "string" },
+            "name": { "type": "string" },
+            "category": { "type": "string" },
+            "priceUsd": { "type": "number" },
+            "stock": { "type": "integer" }
+          },
+          "required": ["sku", "name", "category", "priceUsd", "stock"]
+        }
+      },
+      "totalCount": { "type": "integer" }
+    },
+    "required": ["products", "totalCount"]
+  },
+  "allowedDomains": ["127.0.0.1"],
+  "maxSteps": 15,
+  "effort": "low"
+}
