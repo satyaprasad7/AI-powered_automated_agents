@@ -57,6 +57,8 @@ export interface RunResult {
   runDir: string;
   startUrl: string;
   profile: TaskSpec["profile"];
+  /** The browser build that ran, e.g. "Microsoft Edge 141.0.3537.57". */
+  browser?: string;
   /** Groups the runs of one UI job or CLI invocation in the history. */
   jobId?: string;
   /** How many times each agent tool was called. */
@@ -73,6 +75,8 @@ export interface RunOptions {
   runDir: string;
   jobId?: string;
   effort?: TaskSpec["effort"];
+  /** Overrides the task's standard-browser choice (auto, an id or a path). */
+  browser?: string;
   client?: Anthropic;
   log?: (message: string) => void;
   /** Called after every tool step (used by the web UI for live progress). */
@@ -136,9 +140,10 @@ export async function runTask(task: TaskSpec, options: RunOptions): Promise<RunR
   };
 
   try {
-    await driver.launch({ headless: options.headless, profile: PROFILES[task.profile] });
+    await driver.launch({ headless: options.headless, profile: PROFILES[task.profile], browser: options.browser ?? task.browser });
+    result.browser = driver.browserInfo();
     await driver.goto(task.startUrl);
-    log(`[${driver.name}] opened ${task.startUrl}`);
+    log(`[${driver.name}: ${result.browser}] opened ${task.startUrl}`);
     const startShot = ctx.screenshotPath("start");
     await driver
       .screenshot(startShot)

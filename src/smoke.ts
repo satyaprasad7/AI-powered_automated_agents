@@ -103,11 +103,16 @@ async function smokeProfiles(name: DriverName): Promise<void> {
 
 const server = (await isDemoServerUp()) ? undefined : await startDemoServer();
 let failed = false;
-for (const name of ["playwright", "puppeteer"] as const) {
+for (const name of ["playwright", "puppeteer", "standard"] as const) {
   try {
     await smoke(name);
     await smokeProfiles(name);
   } catch (err) {
+    // The standard engine is optional: it needs Chrome or Edge installed on this machine.
+    if (name === "standard" && /No installed Google Chrome or Microsoft Edge/.test(String(err))) {
+      console.log(`- standard: skipped (no installed Chrome or Edge)`);
+      continue;
+    }
     failed = true;
     console.error(`✗ ${name}: ${err instanceof Error ? err.message : err}`);
   }

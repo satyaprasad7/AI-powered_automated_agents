@@ -1,13 +1,26 @@
 import type { BrowserProfile } from "../detection/profiles.js";
 import type { Fingerprint } from "../detection/fingerprint.js";
 
-export type DriverName = "playwright" | "puppeteer";
+export const DRIVER_NAMES = ["playwright", "puppeteer", "standard"] as const;
+/** playwright / puppeteer use their bundled test browsers; standard drives the installed Chrome or Edge. */
+export type DriverName = (typeof DRIVER_NAMES)[number];
+
+export const DRIVER_LABELS: Record<DriverName, string> = {
+  playwright: "Playwright",
+  puppeteer: "Puppeteer",
+  standard: "Standard browser",
+};
 
 export interface LaunchOptions {
   headless: boolean;
   /** Detection-test profile (user agent, locale, time zone, injected fingerprint). */
   profile?: BrowserProfile;
   viewport?: { width: number; height: number };
+  /**
+   * Standard browser engine only: "auto" (default), an installed browser id
+   * ("chrome", "msedge", ...) or a full path to a Chromium-based executable.
+   */
+  browser?: string;
   /** Per-action timeout in ms (clicks, fills, waits). */
   actionTimeoutMs?: number;
 }
@@ -38,13 +51,15 @@ export interface PageSnapshot {
 }
 
 /**
- * The browser surface the agent drives. Playwright and Puppeteer each
- * implement it, so tasks and the agent loop are driver-agnostic.
+ * The browser surface the agent drives. Playwright, Puppeteer and the
+ * standard (installed) browser each implement it, so tasks and the agent loop are driver-agnostic.
  * Elements are addressed by the `ref` values returned from `snapshot()`.
  */
 export interface BrowserDriver {
   readonly name: DriverName;
   launch(options: LaunchOptions): Promise<void>;
+  /** The browser that actually ran, e.g. "Microsoft Edge 141.0.3537.57", once launched. */
+  browserInfo(): string | undefined;
   goto(url: string): Promise<void>;
   url(): string;
   snapshot(): Promise<PageSnapshot>;

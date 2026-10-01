@@ -1,6 +1,6 @@
-# Agentic Browser Automation (Claude + Playwright / Puppeteer)
+# Agentic Browser Automation (Claude + Playwright / Puppeteer / your browser)
 
-A prototype of LLM-driven browser agents. You describe a job as a goal. Claude reads the page, decides the next action, drives a real browser through **Playwright or Puppeteer**, verifies the outcome and writes an HTML/JSON report. It covers the same ground as the Agentic Survey Tester, generalized to:
+A prototype of LLM-driven browser agents. You describe a job as a goal. Claude reads the page, decides the next action, drives a real browser through **Playwright, Puppeteer or your installed Chrome/Edge**, verifies the outcome and writes an HTML/JSON report. It covers the same ground as the Agentic Survey Tester, generalized to:
 
 | Capability | Demo task |
 |---|---|
@@ -14,7 +14,7 @@ A prototype of LLM-driven browser agents. You describe a job as a goal. Claude r
 ```bash
 npm install
 npx playwright install chromium      # Puppeteer downloads its own Chrome during npm install
-npm run smoke                        # checks both drivers against the demo site; no API key needed
+npm run smoke                        # checks all engines against the demo site (standard is skipped if Chrome/Edge is missing); no API key needed
 cp .env.example .env                 # add ANTHROPIC_API_KEY (or use `ant auth login`)
 npm run ui                           # web UI at http://127.0.0.1:4180
 ```
@@ -29,10 +29,20 @@ npm run ui                           # web UI at http://127.0.0.1:4180
 | Form & input validation | Finds up to 3 forms and runs negative tests (empty required fields, bad email, out-of-range values) with obviously fake test data |
 | Structured data extraction | Returns the page type, summary, key facts, tables, repeated items (products, listings…) and contacts as JSON |
 | Accessibility & content | Uses a deterministic `audit_page` tool (alt text, labels, headings, lang, meta tags, duplicate ids, broken images) and gives a 0–100 score |
-| Bot, anti-detect & VM detection | Visits the site three times: as a standard automated browser, as a virtual machine, and as an anti-detect browser. Checks whether the site's bot/fraud defenses flag each one (see below) |
+| Bot detection | Visits as a plain automated browser and checks whether the site's bot/fraud defenses flag it (see below) |
+| Anti-detect browser detection | Visits with a spoofed, inconsistent fingerprint and checks whether the site catches it |
+| Virtual machine detection | Visits with a VMware-guest fingerprint and checks whether the site flags the VM |
 | Custom goal (optional) | Any free-text instruction, e.g. "search for 'laptop' and verify the first result has a price" |
 
-- Choose Playwright, Puppeteer or **Both** to compare engines on the same site.
+- Choose one or more **browser engines**; each task runs once per engine so you can compare them on the same site:
+  - **Playwright**: Playwright's bundled Chromium.
+  - **Puppeteer**: Puppeteer's bundled Chrome for Testing.
+  - **Standard browser**: a browser installed on your machine, driven through Playwright with a fresh temporary profile (your bookmarks, cookies and logins are not touched). It is still an automated browser, but sites see a regular branded build instead of a test one. When it is selected, a **Browser** dropdown appears:
+    - **Auto** uses the first one found, in this order: Google Chrome, Microsoft Edge, Chrome Beta, Edge Beta, Brave, Vivaldi.
+    - Pick any installed browser by name (the list shows only what is installed).
+    - **Other (enter path)…** takes the full path to any other Chromium-based browser executable. Firefox and Safari are not supported.
+
+  Reports and History show the exact build that ran, e.g. "Microsoft Edge 154.0.4258.48".
 - Each task card shows the current step, the latest browser screenshot, pass/fail checks, extracted JSON, cost, and a link to the full report.
 - **Approvals happen in the browser.** Unless you tick "Allow form submissions", every submit-like click pauses the agent and shows the action and a screenshot, with Allow / Deny buttons. Payment and delete clicks always ask. If you deny, the agent continues with what it can do without that action.
 - The agent stays on the domain you entered (subdomains included). Runs can be cancelled.
@@ -51,13 +61,13 @@ Runs saved before sessions existed are grouped by their folder timestamp and lab
 
 ## Bot, anti-detect browser & virtual machine detection
 
-This suite checks whether **your** site's defenses catch suspicious clients, which matters for survey fraud, fake sign-ups and ad fraud. Each run uses a browser profile ([src/detection/profiles.ts](src/detection/profiles.ts)) that reproduces the signals of one kind of client:
+This suite checks whether **your** site's defenses catch suspicious clients, which matters for survey fraud, fake sign-ups and ad fraud. Each of the three detection suites uses one browser profile ([src/detection/profiles.ts](src/detection/profiles.ts)) that reproduces the signals of one kind of client:
 
 | Profile | Signals it presents |
 |---|---|
-| Standard automation | `navigator.webdriver`, headless user agent |
-| Virtual machine | VMware virtual GPU (`VMware SVGA 3D`), 2 CPU cores / 2 GB memory, 1024×768 screen |
-| Anti-detect browser | Spoofed macOS user agent while the platform and client hints leak Windows, an Apple GPU on Windows, a Tokyo time zone with an en-US locale |
+| Standard automation (Bot detection) | `navigator.webdriver`, headless user agent |
+| Virtual machine (VM detection) | VMware virtual GPU (`VMware SVGA 3D`), 2 CPU cores / 2 GB memory, 1024×768 screen |
+| Anti-detect browser (Anti-detect detection) | Spoofed macOS user agent while the platform and client hints leak Windows, an Apple GPU on Windows, a Tokyo time zone with an en-US locale |
 
 The agent calls the `fingerprint` tool to see what the browser exposes and which red flags a good detector should raise. It then observes the site's reaction: a block page, HTTP 403/429, a CAPTCHA, a warning or a quality-check result. A check passes only when the site visibly detected the signal. If the site shows nothing, the check fails with a note that detection might be happening invisibly on the server.
 
@@ -78,6 +88,11 @@ Other commands:
 ```bash
 npm run agent -- list
 npm run agent -- run tasks/*.json --driver both        # same tasks on Playwright and Puppeteer
+npm run agent -- browsers                              # browsers the standard engine can use on this machine
+npm run agent -- run tasks/*.json --driver standard    # installed browser, auto-picked
+npm run agent -- run tasks/*.json --driver standard --browser msedge
+npm run agent -- run tasks/*.json --driver standard --browser "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
+npm run agent -- run tasks/*.json --driver all         # all three (or a list: --driver playwright,standard)
 npm run agent -- run tasks/expense-workflow.json --headed
 npm run agent -- run tasks/data-extraction.json --effort high
 npm run demo                                           # serve the demo site on http://127.0.0.1:4173
@@ -90,13 +105,14 @@ Tasks that target the demo site start it automatically. Each run writes `runs/<t
 ```
 task.json ──► Agent loop (Claude, claude-opus-5-5) ──tool calls──► Tool executor ──► BrowserDriver
                     ▲                                                   │         ├─ PlaywrightDriver
-                    └──────── page snapshot / results ◄─────────────────┘         └─ PuppeteerDriver
+                    └──────── page snapshot / results ◄─────────────────┘         ├─ PuppeteerDriver
+                                                                                  └─ StandardBrowserDriver (installed Chrome, Edge, Brave… or a path)
                                                                   guardrails: domain allowlist, step budget,
                                                                   approval gate, secret placeholders
 ```
 
 - **Page understanding.** An in-page script ([src/drivers/page-scripts.ts](src/drivers/page-scripts.ts)) tags each visible interactive element with a stable `data-agent-ref`. It returns a compact list of those elements (role, accessible name, value, validation error, select options) plus the visible text. Claude acts on refs, not brittle CSS selectors. Screenshots are available as a tool for visual checks.
-- **Driver-agnostic.** Both drivers implement one `BrowserDriver` interface ([src/drivers/types.ts](src/drivers/types.ts)). Switch per task (`"driver"`) or per run (`--driver`).
+- **Driver-agnostic.** All drivers implement one `BrowserDriver` interface ([src/drivers/types.ts](src/drivers/types.ts)). Switch per task (`"driver"`: `playwright`, `puppeteer` or `standard`, plus `"browser"` for the standard engine) or per run (`--driver`, `--browser`).
 - **Tools** ([src/agent/tools.ts](src/agent/tools.ts)): `navigate`, `observe`, `click`, `fill`, `select_option`, `press_key`, `get_text`, `extract_table`, `wait_for_text`, `audit_page`, `fingerprint`, `screenshot`, `record_check`, `finish`. Every tool schema is strict. Actions run one at a time because browser steps depend on order.
 - **Verification.** Claude records one `record_check` per success criterion, with evidence. `finish` returns structured data that matches the task's `outputSchema`.
 

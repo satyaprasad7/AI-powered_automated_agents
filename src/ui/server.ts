@@ -12,7 +12,8 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { runTask, type RunResult, type StepRecord } from "../agent/agent.js";
 import type { Check } from "../agent/tools.js";
-import type { DriverName } from "../drivers/index.js";
+import { DRIVER_LABELS, DRIVER_NAMES, type DriverName } from "../drivers/index.js";
+import { findInstalledBrowsers, resolveBrowser } from "../drivers/installed.js";
 import { writeReport } from "../report/report.js";
 import { loadHistory, newJobId, writeJobSummary, type JobMeta } from "../report/history.js";
 import { buildSuiteTasks, SUITES, type SuiteId } from "../tasks/suites.js";
@@ -40,10 +41,12 @@ const JobRequest = z.object({
   url: z.url({ protocol: /^https?$/ }),
   suites: z.array(z.enum(Object.keys(SUITES) as [SuiteId, ...SuiteId[]])).min(1),
   customGoal: z.string().max(4000).optional(),
-  drivers: z.array(z.enum(["playwright", "puppeteer"])).min(1),
+  drivers: z.array(z.enum(DRIVER_NAMES)).min(1),
   allowSubmissions: z.boolean().default(false),
   effort: z.enum(["low", "medium", "high", "xhigh", "max"]).default("medium"),
   headed: z.boolean().default(false),
+  /** Standard browser engine: "auto", an installed browser id, or a full executable path. */
+  browser: z.string().trim().max(1000).default("auto"),
 });
 type JobRequest = z.infer<typeof JobRequest>;
 
@@ -115,6 +118,7 @@ async function runJob(job: Job): Promise<void> {
     urls: [request.url],
     suites: request.suites,
     drivers: request.drivers,
+    browser: request.drivers.includes("standard") ? request.browser : undefined,
   };
   const results: RunResult[] = [];
   let totalCost = 0;
@@ -132,6 +136,7 @@ async function runJob(job: Job): Promise<void> {
         driver,
         headless: task.headless,
         autoApprove: false,
+        browser: request.browser,
         runDir: join(RUNS_DIR, `${job.id}-${slug(task.name)}-${driver}`),
         jobId: job.id,
         signal: job.abort.signal,
@@ -233,6 +238,8 @@ const server = createServer(async (req, res) => {
         demoUrl: `${DEMO_ORIGIN}/`,
         activeJob: activeJob?.id ?? null,
         suites: SUITES,
+        drivers: DRIVER_LABELS,
+        browsers: findInstalledBrowsers(),
       });
     }
 
@@ -255,6 +262,13 @@ const server = createServer(async (req, res) => {
       if (!parsed.success) return sendJson(res, 400, { error: z.prettifyError(parsed.error) });
       if (parsed.data.suites.length === 1 && parsed.data.suites[0] === "custom" && !parsed.data.customGoal?.trim()) {
         return sendJson(res, 400, { error: "Enter a custom goal, or pick at least one other suite." });
+      }
+      if (parsed.data.drivers.includes("standard")) {
+        try {
+          resolveBrowser(parsed.data.browser);
+        } catch (err) {
+          return sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
+        }
       }
       return sendJson(res, 201, { id: startJob(parsed.data).id });
     }

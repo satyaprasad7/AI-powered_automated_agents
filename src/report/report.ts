@@ -68,7 +68,7 @@ details{margin:6px 0 0 36px;font-size:13px}summary{cursor:pointer;color:var(--ac
 code{font-size:13px;font-weight:600}a{color:var(--accent)}
 </style></head><body><main>
 <h1>${esc(r.taskName)}</h1>
-<div class="muted">${esc(r.category)} · engine: <b>${esc(r.driver)}</b>${r.profile && r.profile !== "default" ? ` · profile: <b>${esc(r.profile)}</b>` : ""} · ${esc(r.model)} · ${esc(r.startedAt)}</div>
+<div class="muted">${esc(r.category)} · engine: <b>${esc(r.driver)}</b>${r.browser ? ` (${esc(r.browser)})` : ""}${r.profile && r.profile !== "default" ? ` · profile: <b>${esc(r.profile)}</b>` : ""} · ${esc(r.model)} · ${esc(r.startedAt)}</div>
 <div class="muted">${esc(r.startUrl)}${r.jobId ? ` · <a href="../_jobs/${esc(r.jobId)}.html">session summary</a>` : ""}</div>
 <section>
   <span class="pill ${r.status === "success" ? "ok" : r.status === "failure" || r.status === "error" ? "bad" : "warn"}">${esc(r.status.toUpperCase())}</span>

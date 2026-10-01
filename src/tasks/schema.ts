@@ -1,12 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
+import { DRIVER_NAMES } from "../drivers/types.js";
 
 export const TaskSpec = z.object({
   name: z.string().min(1),
   /** testing | form-submission | data-extraction | workflow | validation - used for reporting only. */
   category: z.string().default("general"),
   description: z.string().optional(),
-  driver: z.enum(["playwright", "puppeteer"]).default("playwright"),
+  driver: z.enum(DRIVER_NAMES).default("playwright"),
   startUrl: z.url(),
   /** Natural-language objective handed to the agent. */
   goal: z.string().min(1),
@@ -30,6 +31,12 @@ export const TaskSpec = z.object({
   /** Browser profile for bot / fraud detection testing (see src/detection/profiles.ts). */
   profile: z.enum(["default", "vm", "anti-detect"]).default("default"),
   headless: z.boolean().default(true),
+  /**
+   * Which installed browser the "standard" driver uses: "auto" (first found of
+   * Chrome, Edge, Chrome Beta, Edge Beta, Brave, Vivaldi), one of those ids,
+   * or a full path to a Chromium-based executable. Ignored by other drivers.
+   */
+  browser: z.string().default("auto"),
 });
 
 export type TaskSpec = z.infer<typeof TaskSpec>;

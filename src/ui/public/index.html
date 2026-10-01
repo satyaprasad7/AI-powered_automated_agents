@@ -47,6 +47,8 @@
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .seg label { padding: 6px 12px; cursor: pointer; gap: 0; }
   .seg input { display: none; }
+  #browserPathRow { flex: 1 1 360px; }
+  #browserPath { flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); }
   .seg label:has(input:checked) { background: var(--accent); color: var(--accent-fg); }
   .banner { border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 14px; }
   .banner.warn { background: var(--warn-bg); color: var(--warn); }
@@ -137,7 +139,7 @@
 <body>
 <main>
   <h1>Agentic Web Tester</h1>
-  <p class="sub">Paste a link. Claude drives a real browser (Playwright or Puppeteer) to explore, test forms, extract data and check accessibility, then reports back.</p>
+  <p class="sub">Paste a link. Claude drives a real browser (Playwright, Puppeteer or a browser installed on this machine) to explore, test forms, extract data and check accessibility, then reports back.</p>
 
   <div id="banner"></div>
 
@@ -161,7 +163,9 @@
         <label class="suite"><input type="checkbox" name="suite" value="forms" checked><div><b>Form &amp; input validation</b><span>Negative tests: required fields, bad emails, ranges</span></div></label>
         <label class="suite"><input type="checkbox" name="suite" value="extract" checked><div><b>Structured data extraction</b><span>Tables, listings, key facts and contacts as JSON</span></div></label>
         <label class="suite"><input type="checkbox" name="suite" value="a11y" checked><div><b>Accessibility &amp; content</b><span>Alt text, labels, headings, meta tags, a score</span></div></label>
-        <label class="suite"><input type="checkbox" name="suite" value="detection" checked><div><b>Bot, anti-detect &amp; VM detection</b><span>Visits as a plain bot, a virtual machine and an anti-detect browser: does the site flag each?</span></div></label>
+        <label class="suite"><input type="checkbox" name="suite" value="bot" checked><div><b>Bot detection</b><span>Visits as a plain automated browser: does the site flag the bot?</span></div></label>
+        <label class="suite"><input type="checkbox" name="suite" value="anti-detect" checked><div><b>Anti-detect browser detection</b><span>Spoofed, inconsistent fingerprint (OS, GPU, time zone): does the site catch it?</span></div></label>
+        <label class="suite"><input type="checkbox" name="suite" value="vm" checked><div><b>Virtual machine detection</b><span>VMware GPU, low CPU/memory, VM screen size: does the site flag the VM?</span></div></label>
       </div>
     </fieldset>
 
@@ -173,13 +177,17 @@
     <fieldset>
       <legend>Options</legend>
       <div class="options">
-        <label>Browser engine
-          <span class="seg">
-            <label><input type="radio" name="driver" value="playwright" checked>Playwright</label>
-            <label><input type="radio" name="driver" value="puppeteer">Puppeteer</label>
-            <label><input type="radio" name="driver" value="both">Both</label>
+        <label>Browser engines
+          <span class="seg" title="Pick one or more; each task runs once per engine">
+            <label><input type="checkbox" name="driver" value="playwright" checked>Playwright</label>
+            <label><input type="checkbox" name="driver" value="puppeteer">Puppeteer</label>
+            <label title="A browser installed on this machine (Chrome, Edge, Brave...)"><input type="checkbox" name="driver" value="standard">Standard browser</label>
           </span>
         </label>
+        <label id="browserPick" hidden>Browser
+          <select id="browser"></select>
+        </label>
+        <label id="browserPathRow" hidden>Path <input id="browserPath" type="text" spellcheck="false" placeholder="C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"></label>
         <label>Effort
           <select id="effort"><option value="low">Low (fast, cheap)</option><option value="medium" selected>Medium</option><option value="high">High (thorough)</option></select>
         </label>
@@ -205,7 +213,7 @@
   <section id="view-history" hidden>
     <div id="engineStats" class="stats"></div>
     <div class="filters card">
-      <label>Engine <select id="fEngine"><option value="">All</option><option value="playwright">Playwright</option><option value="puppeteer">Puppeteer</option></select></label>
+      <label>Engine <select id="fEngine"><option value="">All</option><option value="playwright">Playwright</option><option value="puppeteer">Puppeteer</option><option value="standard">Standard browser</option></select></label>
       <label>Suite <select id="fCategory"><option value="">All</option></select></label>
       <label>Status <select id="fStatus"><option value="">All</option><option value="success">Success</option><option value="failure">Failure</option><option value="blocked">Blocked</option><option value="error">Error</option><option value="incomplete">Incomplete</option></select></label>
       <label>Source <select id="fSource"><option value="">All</option><option value="ui">Web UI</option><option value="cli">Command line</option></select></label>
@@ -232,6 +240,10 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const ENGINE_LABELS = { playwright: 'Playwright', puppeteer: 'Puppeteer', standard: 'Standard browser' };
+const engineLabel = (d) => ENGINE_LABELS[d] || d;
+// Sessions saved before the detection suite was split map onto all three new suites.
+const LEGACY_SUITES = { detection: ['bot', 'anti-detect', 'vm'] };
 const state = { jobId: null, es: null, tasks: new Map(), done: 0, cost: 0, approvals: [] };
 
 async function init() {
@@ -240,6 +252,12 @@ async function init() {
     $('banner').innerHTML = '<div class="banner warn"><b>No Anthropic API key found.</b> Add <code>ANTHROPIC_API_KEY=…</code> to the <code>.env</code> file in the project folder and restart <code>npm run ui</code>. (Skip this if you signed in with <code>ant auth login</code>.)</div>';
   }
   $('demo').onclick = () => { $('url').value = status.demoUrl; $('url').focus(); };
+  const found = status.browsers || [];
+  $('browser').innerHTML =
+    `<option value="auto">Auto${found[0] ? ` (${esc(found[0].label)})` : ' (none found)'}</option>` +
+    found.map((b) => `<option value="${esc(b.id)}" title="${esc(b.executablePath)}">${esc(b.label)}</option>`).join('') +
+    '<option value="custom">Other (enter path)…</option>';
+  syncBrowserPick();
   const resume = status.activeJob || sessionStorage.getItem('jobId');
   if (resume) attach(resume);
 }
@@ -250,10 +268,12 @@ $('form').addEventListener('submit', async (e) => {
   const goal = $('goal').value.trim();
   if (goal) suites.push('custom');
   if (!suites.length) return showError('Pick at least one suite or enter a custom goal.');
-  const driver = document.querySelector('input[name=driver]:checked').value;
+  const drivers = [...document.querySelectorAll('input[name=driver]:checked')].map((i) => i.value);
+  if (!drivers.length) return showError('Pick at least one browser engine.');
+  if (drivers.includes('standard') && !chosenBrowser()) return showError('Enter the full path to the browser executable.');
   const body = {
     url: $('url').value.trim(), suites, customGoal: goal || undefined,
-    drivers: driver === 'both' ? ['playwright', 'puppeteer'] : [driver],
+    drivers, browser: drivers.includes('standard') ? chosenBrowser() : undefined,
     effort: $('effort').value, allowSubmissions: $('allowSubmit').checked, headed: $('headed').checked,
   };
   $('run').disabled = true;
@@ -263,6 +283,19 @@ $('form').addEventListener('submit', async (e) => {
   sessionStorage.setItem('jobId', out.id);
   attach(out.id);
 });
+
+// The browser picker only applies to the Standard browser engine.
+function syncBrowserPick() {
+  const on = document.querySelector('input[name=driver][value=standard]').checked;
+  $('browserPick').hidden = !on;
+  $('browserPathRow').hidden = !on || $('browser').value !== 'custom';
+}
+document.querySelectorAll('input[name=driver]').forEach((i) => i.addEventListener('change', syncBrowserPick));
+$('browser').addEventListener('change', () => { syncBrowserPick(); if ($('browser').value === 'custom') $('browserPath').focus(); });
+
+function chosenBrowser() {
+  return $('browser').value === 'custom' ? $('browserPath').value.trim().replace(/^"(.*)"$/, '$1') : $('browser').value;
+}
 
 function showError(msg) {
   $('banner').innerHTML = `<div class="banner err">${esc(msg)}</div>`;
@@ -325,7 +358,7 @@ function addTask(item) {
   const el = document.createElement('article');
   el.className = 'task';
   el.innerHTML = `
-    <div class="task-head"><h3>${esc(item.title)}</h3><span class="chip">${esc(item.driver)}</span><span class="pill">queued</span></div>
+    <div class="task-head"><h3>${esc(item.title)}</h3><span class="chip">${esc(engineLabel(item.driver))}</span><span class="pill">queued</span></div>
     <div class="task-body">
       <div>
         <p class="now">Waiting to start…</p>
@@ -394,7 +427,7 @@ function endTask(key, r) {
 function queueApproval(ev) { state.approvals.push(ev); if (state.approvals.length === 1) showApproval(); }
 function showApproval() {
   const ev = state.approvals[0]; if (!ev) return;
-  $('apWho').textContent = `${ev.title} · ${ev.driver}`;
+  $('apWho').textContent = `${ev.title} · ${engineLabel(ev.driver)}`;
   $('apAction').textContent = `The agent wants to ${ev.action}`;
   $('apShot').hidden = !ev.screenshot; if (ev.screenshot) $('apShot').src = ev.screenshot;
   if (!$('approval').open) $('approval').showModal();
@@ -451,13 +484,13 @@ function runMatches(r, job) {
 }
 
 function renderEngineStats(runs) {
-  const engines = ['playwright', 'puppeteer'];
+  const engines = Object.keys(ENGINE_LABELS);
   $('engineStats').innerHTML = engines.map((e) => {
     const rs = runs.filter((r) => r.driver === e);
     const passed = rs.filter((r) => r.status === 'success').length;
     const avg = rs.length ? rs.reduce((s, r) => s + r.durationMs, 0) / rs.length / 1000 : 0;
     const cost = rs.reduce((s, r) => s + r.costUsd, 0);
-    return `<div class="stat-card"><h3>${e}</h3><div class="nums">
+    return `<div class="stat-card"><h3>${esc(engineLabel(e))}</h3><div class="nums">
       <span>Runs<b>${rs.length}</b></span><span>Pass rate<b>${rs.length ? Math.round((100 * passed) / rs.length) + '%' : '–'}</b></span>
       <span>Avg time<b>${rs.length ? avg.toFixed(0) + 's' : '–'}</b></span><span>Cost<b>$${cost.toFixed(2)}</b></span></div></div>`;
   }).join('');
@@ -478,7 +511,7 @@ function renderHistory() {
       const tools = Object.entries(r.toolUsage || {}).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([t, n]) => `${esc(t)} ×${n}`).join(', ');
       return `<tr>
         <td><a href="${r.report}" target="_blank">${esc(r.taskName)}</a><div class="tools">${esc(r.summary).slice(0, 160)}</div></td>
-        <td>${esc(r.driver)}${r.profile && r.profile !== 'default' ? `<div class="tools">profile: ${esc(r.profile)}</div>` : ''}</td>
+        <td>${esc(engineLabel(r.driver))}${r.browser ? `<div class="tools">${esc(r.browser)}</div>` : ''}${r.profile && r.profile !== 'default' ? `<div class="tools">profile: ${esc(r.profile)}</div>` : ''}</td>
         <td>${pillFor(r.status)}</td>
         <td>${r.checksPassed}/${r.checksTotal}</td>
         <td>${r.steps}<div class="tools">${tools}</div></td>
@@ -491,7 +524,7 @@ function renderHistory() {
         <div>
           <div class="when">${fmtTime(job.startedAt)} ${job.running ? pillFor('running') : ''}</div>
           <div class="url">${esc(job.urls.join(', ')) || 'URL not recorded (older run)'}</div>
-          <div class="chips"><span class="chip">${job.source === 'ui' ? 'Web UI' : 'Command line'}</span>${engines.map((e) => `<span class="chip">${esc(e)}</span>`).join('')}</div>
+          <div class="chips"><span class="chip">${job.source === 'ui' ? 'Web UI' : 'Command line'}</span>${engines.map((e) => `<span class="chip">${esc(engineLabel(e))}</span>`).join('')}</div>
         </div>
         <div>
           <div class="right"><b>${passed}/${runs.length}</b> passed · <b>$${cost.toFixed(3)}</b></div>
@@ -519,11 +552,17 @@ $('historyList').addEventListener('click', (e) => {
   const job = hist.jobs.find((j) => j.jobId === btn.dataset.rerun); if (!job) return;
   $('url').value = job.urls[0];
   if (job.suites?.length && job.source === 'ui') {
-    document.querySelectorAll('input[name=suite]').forEach((i) => (i.checked = job.suites.includes(i.value)));
+    const suites = job.suites.flatMap((s) => LEGACY_SUITES[s] || [s]);
+    document.querySelectorAll('input[name=suite]').forEach((i) => (i.checked = suites.includes(i.value)));
   }
   const drivers = job.drivers?.length ? job.drivers : [...new Set(job.runs.map((r) => r.driver))];
-  const d = drivers.length > 1 ? 'both' : drivers[0];
-  const radio = document.querySelector(`input[name=driver][value=${d}]`); if (radio) radio.checked = true;
+  document.querySelectorAll('input[name=driver]').forEach((i) => (i.checked = drivers.includes(i.value)));
+  if (job.browser) {
+    const known = [...$('browser').options].some((o) => o.value === job.browser && o.value !== 'custom');
+    $('browser').value = known ? job.browser : 'custom';
+    if (!known) $('browserPath').value = job.browser;
+  }
+  syncBrowserPick();
   showView('new');
   $('url').focus();
 });

@@ -1,5 +1,5 @@
 ﻿import { chromium, type Browser, type Page } from "playwright";
-import type { BrowserDriver, ElementInfo, LaunchOptions, PageSnapshot } from "./types.js";
+import type { BrowserDriver, DriverName, ElementInfo, LaunchOptions, PageSnapshot } from "./types.js";
 import {
   describeScript,
   extractTableScript,
@@ -11,6 +11,7 @@ import {
   textPresentScript,
 } from "./page-scripts.js";
 import { fingerprintScript, type Fingerprint } from "../detection/fingerprint.js";
+import { resolveBrowser } from "./installed.js";
 
 /**
  * Launches Chromium, falling back when the default build is missing or
@@ -35,8 +36,9 @@ async function launchChromium(headless: boolean): Promise<Browser> {
 }
 
 export class PlaywrightDriver implements BrowserDriver {
-  readonly name = "playwright" as const;
+  readonly name: DriverName = "playwright";
   private browser?: Browser;
+  protected browserLabel = "Playwright Chromium";
   private _page?: Page;
   private timeout = 10_000;
   private status: number | null = null;
@@ -50,7 +52,7 @@ export class PlaywrightDriver implements BrowserDriver {
 
   async launch(options: LaunchOptions): Promise<void> {
     this.timeout = options.actionTimeoutMs ?? this.timeout;
-    this.browser = await launchChromium(options.headless);
+    this.browser = await this.launchBrowser(options);
     const profile = options.profile;
     const context = await this.browser.newContext({
       viewport: profile?.viewport ?? options.viewport ?? { width: 1280, height: 900 },
@@ -75,6 +77,14 @@ export class PlaywrightDriver implements BrowserDriver {
     });
     page.on("requestfinished", done);
     page.on("requestfailed", done);
+  }
+
+  protected launchBrowser(options: LaunchOptions): Promise<Browser> {
+    return launchChromium(options.headless);
+  }
+
+  browserInfo(): string | undefined {
+    return this.browser && `${this.browserLabel} ${this.browser.version()}`;
   }
 
   async goto(url: string): Promise<void> {
@@ -169,5 +179,22 @@ export class PlaywrightDriver implements BrowserDriver {
       if (this.inflight === 0 && Date.now() - this.lastNetworkActivity >= 300) return;
       await new Promise((r) => setTimeout(r, 50));
     }
+  }
+}
+
+/**
+ * The "standard browser" engine: a browser installed on this machine (Chrome,
+ * Edge, Brave... or any Chromium-based executable), driven through Playwright
+ * with a fresh, temporary profile. It is still an automated
+ * browser (navigator.webdriver stays true); what changes is the binary, so
+ * sites see a regular branded build instead of a test Chromium.
+ */
+export class StandardBrowserDriver extends PlaywrightDriver {
+  override readonly name: DriverName = "standard";
+
+  protected override launchBrowser(options: LaunchOptions): Promise<Browser> {
+    const target = resolveBrowser(options.browser);
+    this.browserLabel = target.label;
+    return chromium.launch({ headless: options.headless, executablePath: target.executablePath });
   }
 }

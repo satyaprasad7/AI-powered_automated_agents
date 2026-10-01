@@ -18,6 +18,7 @@ export class PuppeteerDriver implements BrowserDriver {
   private _page?: Page;
   private timeout = 10_000;
   private status: number | null = null;
+  private browserVersion = "";
 
   private get page(): Page {
     if (!this._page) throw new Error("Browser not launched");
@@ -32,6 +33,7 @@ export class PuppeteerDriver implements BrowserDriver {
       defaultViewport: profile?.viewport ?? options.viewport ?? { width: 1280, height: 900 },
       args: profile?.locale ? [`--lang=${profile.locale}`] : [],
     });
+    this.browserVersion = (await this.browser.version()).replace(/^(Headless)?Chrome\//, "");
     this._page = await this.browser.newPage();
     this._page.setDefaultTimeout(this.timeout);
     const page = this._page;
@@ -42,6 +44,10 @@ export class PuppeteerDriver implements BrowserDriver {
     page.on("response", (r) => {
       if (r.request().isNavigationRequest() && r.frame() === page.mainFrame()) this.status = r.status();
     });
+  }
+
+  browserInfo(): string | undefined {
+    return this.browser && `Chrome for Testing ${this.browserVersion}`;
   }
 
   async goto(url: string): Promise<void> {

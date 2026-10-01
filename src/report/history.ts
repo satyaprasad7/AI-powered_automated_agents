@@ -9,9 +9,13 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import type { RunResult } from "../agent/agent.js";
 import { SUITES } from "../tasks/suites.js";
+import { DRIVER_LABELS } from "../drivers/types.js";
 
 export const JOBS_DIR = "_jobs";
-const SUITE_TITLES = Object.values(SUITES).map((s) => s.title);
+// Includes the combined detection suite's title from before it was split into bot / anti-detect / VM.
+const engineLabel = (d: string) => DRIVER_LABELS[d as keyof typeof DRIVER_LABELS] ?? d;
+
+const SUITE_TITLES = [...Object.values(SUITES).map((s) => s.title), "Bot, anti-detect & VM detection"];
 
 export interface JobMeta {
   jobId: string;
@@ -21,6 +25,8 @@ export interface JobMeta {
   urls: string[];
   suites: string[];
   drivers: string[];
+  /** The standard-browser choice (auto, an id or a path), when that engine ran. */
+  browser?: string;
   cancelled?: boolean;
 }
 
@@ -31,6 +37,7 @@ export interface RunEntry {
   category: string;
   driver: string;
   profile: string;
+  browser?: string;
   startUrl: string;
   status: string;
   summary: string;
@@ -65,6 +72,7 @@ function toEntry(r: RunResult & { startScreenshot?: string }, dir: string): RunE
     category: r.category,
     driver: r.driver,
     profile: r.profile ?? "default",
+    browser: r.browser,
     startUrl: r.startUrl ?? "",
     status: r.status,
     summary: r.summary,
@@ -114,7 +122,7 @@ function renderJobSummary(meta: JobMeta, runs: RunEntry[]): string {
   const matrix =
     drivers.length > 1
       ? `<section><h2>Engine comparison</h2><div class="scroll"><table>
-        <tr><th>Task</th>${drivers.map((d) => `<th>${esc(d)}</th>`).join("")}</tr>
+        <tr><th>Task</th>${drivers.map((d) => `<th>${esc(engineLabel(d))}</th>`).join("")}</tr>
         ${taskNames
           .map(
             (name) =>
@@ -142,7 +150,7 @@ function renderJobSummary(meta: JobMeta, runs: RunEntry[]): string {
     .map(
       (r) => `<tr>
         <td><a href="../${encodeURIComponent(r.dir)}/report.html">${esc(r.taskName)}</a><div class="muted small">${esc(r.summary)}</div></td>
-        <td>${esc(r.driver)}${r.profile !== "default" ? `<div class="muted small">${esc(r.profile)}</div>` : ""}</td>
+        <td>${esc(engineLabel(r.driver))}${r.browser ? `<div class="muted small">${esc(r.browser)}</div>` : ""}${r.profile !== "default" ? `<div class="muted small">${esc(r.profile)}</div>` : ""}</td>
         <td><span class="pill ${pillClass(r.status)}">${esc(r.status)}</span></td>
         <td>${r.checksPassed}/${r.checksTotal}</td>
         <td>${r.steps}</td>
@@ -172,7 +180,7 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute
 <div class="muted">${meta.urls.map(esc).join(", ")}</div>
 <section><div class="meta">
   <div>Runs<b>${t.runs}</b></div><div>Passed<b>${t.passed}</b></div><div>Not passed<b>${t.failed}</b></div>
-  <div>Engines<b>${esc(drivers.join(", "))}</b></div><div>Total time<b>${(t.durationMs / 1000).toFixed(0)} s</b></div><div>Total cost<b>$${t.costUsd.toFixed(3)}</b></div>
+  <div>Engines<b>${esc(drivers.map(engineLabel).join(", "))}</b></div><div>Total time<b>${(t.durationMs / 1000).toFixed(0)} s</b></div><div>Total cost<b>$${t.costUsd.toFixed(3)}</b></div>
 </div></section>
 ${matrix}
 <section><h2>Task reports</h2><div class="scroll"><table>

@@ -1,5 +1,5 @@
 import { TaskSpec } from "./schema.js";
-import { PROFILES } from "../detection/profiles.js";
+import { PROFILES, type ProfileId } from "../detection/profiles.js";
 
 /**
  * Generic test suites that can be pointed at any URL. The web UI turns
@@ -11,7 +11,9 @@ export const SUITES = {
   forms: { title: "Form & input validation", category: "testing" },
   extract: { title: "Structured data extraction", category: "data-extraction" },
   a11y: { title: "Accessibility & content validation", category: "validation" },
-  detection: { title: "Bot, anti-detect & VM detection", category: "security" },
+  bot: { title: "Bot detection", category: "security" },
+  "anti-detect": { title: "Anti-detect browser detection", category: "security" },
+  vm: { title: "Virtual machine detection", category: "security" },
   custom: { title: "Custom goal", category: "workflow" },
 } as const;
 
@@ -39,6 +41,28 @@ export const TEST_DATA = {
   address: "123 Test Street, Springfield, IL 62701",
   message: "Automated QA test message - please ignore.",
   searchQuery: "test",
+};
+
+/** Each detection suite visits the site with one browser profile and lists what the site should catch. */
+const DETECTION_SUITES: Record<"bot" | "anti-detect" | "vm", { profile: ProfileId; expectations: string[] }> = {
+  bot: {
+    profile: "default",
+    expectations: ["The site detects the automated browser (flag, challenge, block or quality failure)"],
+  },
+  "anti-detect": {
+    profile: "anti-detect",
+    expectations: [
+      "The site detects the automated browser",
+      "The site identifies the spoofed / inconsistent fingerprint (OS vs platform, GPU vs platform, time zone vs locale)",
+    ],
+  },
+  vm: {
+    profile: "vm",
+    expectations: [
+      "The site detects the automated browser",
+      "The site identifies the virtual-machine signals (virtual GPU, low CPU/memory, VM screen size)",
+    ],
+  },
 };
 
 /** Clicks matching these always need approval: money, deletion, irreversible account changes. */
@@ -201,53 +225,42 @@ export function buildSuiteTasks(opts: SuiteOptions): TaskSpec[] {
           }),
         );
         break;
-      case "detection":
-        // One browser session per profile: the site sees each as a separate visitor.
-        for (const profileId of ["default", "vm", "anti-detect"] as const) {
-          const profile = PROFILES[profileId];
-          const expectations: Record<typeof profileId, string[]> = {
-            default: ["The site detects the automated browser (flag, challenge, block or quality failure)"],
-            vm: [
-              "The site detects the automated browser",
-              "The site identifies the virtual-machine signals (virtual GPU, low CPU/memory, VM screen size)",
-            ],
-            "anti-detect": [
-              "The site detects the automated browser",
-              "The site identifies the spoofed / inconsistent fingerprint (OS vs platform, GPU vs platform, time zone vs locale)",
-            ],
-          };
-          tasks.push(
-            TaskSpec.parse({
-              ...common,
-              name: `${meta.title}: ${profile.label}`,
-              profile: profileId,
-              maxSteps: 20,
-              inputs: TEST_DATA,
-              goal:
-                `Test whether this site's bot / fraud defenses detect a suspicious visitor. The browser runs the "${profile.label}" ` +
-                `profile. First call fingerprint to see exactly which signals this browser presents. Then look at how the site ` +
-                `responds: a block or "access denied" page, HTTP 403/429, a CAPTCHA or bot challenge, a warning, or a ` +
-                `quality/fraud-check message (common on survey platforms). If nothing appears on the start page and it is a survey ` +
-                `or form, move through its first screen with the input data (submits still need approval), since many platforms ` +
-                `only screen on submit. Where the site names its detection reasons, check each simulated signal against them. ` +
-                `Record one check per success criterion: it passes only if you saw the site detect that signal. If the site shows ` +
-                `no reaction, the check fails with a note that detection may be happening invisibly on the server. Do not try to ` +
-                `solve challenges or avoid detection. Finish with success when every check passed, otherwise failure.`,
-              successCriteria: expectations[profileId],
-              outputSchema: {
-                type: "object",
-                properties: {
-                  profile: { type: "string" },
-                  simulatedSignals: { type: "array", items: { type: "string" } },
-                  siteReaction: { type: "string", description: "What the site did: blocked, challenged, flagged, or nothing visible" },
-                  detectedSignals: { type: "array", items: { type: "string" } },
-                  missedSignals: { type: "array", items: { type: "string" } },
-                },
+      case "bot":
+      case "anti-detect":
+      case "vm": {
+        const { profile: profileId, expectations } = DETECTION_SUITES[suite];
+        const profile = PROFILES[profileId];
+        tasks.push(
+          TaskSpec.parse({
+            ...common,
+            profile: profileId,
+            maxSteps: 20,
+            inputs: TEST_DATA,
+            goal:
+              `Test whether this site's bot / fraud defenses detect a suspicious visitor. The browser runs the "${profile.label}" ` +
+              `profile. First call fingerprint to see exactly which signals this browser presents. Then look at how the site ` +
+              `responds: a block or "access denied" page, HTTP 403/429, a CAPTCHA or bot challenge, a warning, or a ` +
+              `quality/fraud-check message (common on survey platforms). If nothing appears on the start page and it is a survey ` +
+              `or form, move through its first screen with the input data (submits still need approval), since many platforms ` +
+              `only screen on submit. Where the site names its detection reasons, check each simulated signal against them. ` +
+              `Record one check per success criterion: it passes only if you saw the site detect that signal. If the site shows ` +
+              `no reaction, the check fails with a note that detection may be happening invisibly on the server. Do not try to ` +
+              `solve challenges or avoid detection. Finish with success when every check passed, otherwise failure.`,
+            successCriteria: expectations,
+            outputSchema: {
+              type: "object",
+              properties: {
+                profile: { type: "string" },
+                simulatedSignals: { type: "array", items: { type: "string" } },
+                siteReaction: { type: "string", description: "What the site did: blocked, challenged, flagged, or nothing visible" },
+                detectedSignals: { type: "array", items: { type: "string" } },
+                missedSignals: { type: "array", items: { type: "string" } },
               },
-            }),
-          );
-        }
+            },
+          }),
+        );
         break;
+      }
       case "custom":
         if (!opts.customGoal?.trim()) break;
         tasks.push(
