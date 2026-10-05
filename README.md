@@ -126,6 +126,9 @@ task.json ──► Agent loop (Claude, claude-opus-5-5) ──tool calls──�
 | Secrets never reach the model: Claude types `{{secret:NAME}}` and the executor substitutes the value from an env var. Values echoed on the page are redacted, and password fields are masked in snapshots | `secrets` |
 | Page text is treated as untrusted data. The demo catalogue includes a prompt-injection line to show this | system prompt |
 | Refusal handling with server-side fallback (`fallbacks: "default"`) | [src/agent/agent.ts](src/agent/agent.ts) |
+| Model request timeout and retry budget (120 s, 1 retry by default), so an unresponsive provider ends the run with "AI provider timed out" instead of stalling for about 30 minutes | `AGENT_LLM_TIMEOUT`, `AGENT_LLM_MAX_RETRIES` env vars |
+
+The timeout behavior is covered by the chaos suite in [AI_Powered_Chaos_Testing](https://github.com/satyaprasad7/AI_Powered_Chaos_Testing) (`python -m chaos --agent ts`).
 
 ## Task file reference
 

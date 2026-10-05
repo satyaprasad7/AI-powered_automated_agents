@@ -23,6 +23,14 @@ const PRICE = { input: 4, output: 20, cacheWrite: 5, cacheRead: 0.2 };
 /** Tools whose effect on the page is worth a screenshot in the report. */
 const STATEFUL_TOOLS = new Set(["navigate", "click", "fill", "select_option", "press_key"]);
 const MAX_NUDGES = 2;
+/**
+ * Per-request model timeout and retry budget. Without these the SDK waits 10 minutes per
+ * attempt and retries twice, so a provider that accepts the connection but never answers
+ * stalls a run for about 30 minutes. A turn can legitimately take a while (up to 16k output
+ * tokens), so the default stays generous; worst case is about (retries + 1) x timeout.
+ */
+const LLM_TIMEOUT_MS = envNumber("AGENT_LLM_TIMEOUT", 120) * 1000;
+const LLM_MAX_RETRIES = envNumber("AGENT_LLM_MAX_RETRIES", 1);
 
 export type RunStatus = FinishResult["status"] | "incomplete" | "error";
 
@@ -91,7 +99,7 @@ export interface RunOptions {
 
 export async function runTask(task: TaskSpec, options: RunOptions): Promise<RunResult> {
   const log = options.log ?? (() => {});
-  const client = options.client ?? new Anthropic();
+  const client = options.client ?? new Anthropic({ timeout: LLM_TIMEOUT_MS, maxRetries: LLM_MAX_RETRIES });
   const started = Date.now();
   const screenshotsDir = join(options.runDir, "screenshots");
   await mkdir(screenshotsDir, { recursive: true });
@@ -329,7 +337,16 @@ function costOf(u: RunResult["usage"]): number {
   );
 }
 
+function envNumber(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return process.env[name] && Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
 function errorMessage(err: unknown): string {
+  if (err instanceof Anthropic.APIConnectionTimeoutError) {
+    return `AI provider timed out (no response within ${LLM_TIMEOUT_MS / 1000}s, ${LLM_MAX_RETRIES} retries)`;
+  }
+  if (err instanceof Anthropic.APIConnectionError) return `Could not reach the AI provider: ${err.cause ?? err.message}`;
   if (err instanceof Anthropic.APIError) return `Claude API error ${err.status ?? ""}: ${err.message}`;
   const message = err instanceof Error ? err.message : String(err);
   // Playwright/Puppeteer errors carry long call logs; the first lines are the useful part.
