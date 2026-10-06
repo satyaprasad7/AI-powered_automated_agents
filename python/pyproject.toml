@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-browser-automation"
+version = "0.1.0"
+description = "LLM-driven browser agents (Claude + Playwright/Selenium) for testing, form submission, data extraction, workflow execution and validation."
+requires-python = ">=3.11"
+dependencies = [
+  "anthropic>=1.11",
+  "playwright>=1.63",
+  "selenium>=4.50",
+  "aiohttp>=3.14",
+  "pydantic>=2.13",
+  "python-dotenv>=1.2",
+]
+
+[project.scripts]
+agentic-browser = "agentic_browser.cli:entry"
+
+[tool.setuptools.packages.find]
+include = ["agentic_browser*"]
+
+[tool.setuptools.package-data]
+"agentic_browser.ui" = ["public/*.html"]
