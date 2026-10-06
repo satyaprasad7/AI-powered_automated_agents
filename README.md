@@ -9,6 +9,8 @@ A prototype of LLM-driven browser agents. You describe a job as a goal. Claude r
 | Testing / validation (finds a seeded bug) | [tasks/registration-validation-test.json](tasks/registration-validation-test.json) |
 | Multi-step workflow with human approval | [tasks/expense-workflow.json](tasks/expense-workflow.json) |
 
+> **Python version:** the same solution is also available in Python (Playwright + Selenium, the same web UI, reports and history). See [Python version](#python-version) below and [python/README.md](python/README.md).
+
 ## Quick start
 
 ```bash
@@ -160,6 +162,58 @@ The timeout behavior is covered by the chaos suite in [AI_Powered_Chaos_Testing]
 
 Each report shows the token usage and an estimated cost at claude-opus-5-5 list prices ($4 in / $20 out per 1M tokens, cache reads $0.20). The system prompt and tool definitions are prompt-cached across turns. For high-volume, simple extraction jobs, set `"effort": "low"`.
 
+## Python version
+
+[python/](python/README.md) is a full Python port of this project. It has the same agent, tools, guardrails, detection profiles, suites, reports, history and **web UI**, built on the official `anthropic` Python SDK.
+
+| TypeScript | Python |
+|---|---|
+| `@anthropic-ai/sdk` | `anthropic` |
+| Playwright | Playwright for Python |
+| Puppeteer | **Selenium WebDriver** (Puppeteer has no maintained Python port) |
+| Standard browser (installed Chrome/Edge) | Same |
+| zod | pydantic |
+| `node:http` servers | aiohttp |
+
+Both versions share `tasks/`, `demo-site/public/`, `runs/` and `.env`, and write the same `report.json` format, so runs from either one appear together in the History tab. Task files that say `"driver": "puppeteer"` run on Selenium in Python.
+
+### Setup (once, from the repo root)
+
+```bash
+python -m venv python/.venv
+python/.venv/Scripts/pip install -e python          # macOS/Linux: python/.venv/bin/pip
+python/.venv/Scripts/python -m playwright install chromium
+cp .env.example .env                                # add ANTHROPIC_API_KEY
+```
+
+### Run the web UI from a terminal (PowerShell)
+
+```powershell
+cd "path\to\AI-powered_automated_agents"
+python\.venv\Scripts\Activate.ps1                    # prompt now shows (.venv)
+python -m agentic_browser.ui.server                 # http://127.0.0.1:4180  (--port 4181 to change)
+```
+
+Open http://127.0.0.1:4180, paste a URL (or click "Use the local demo site"), choose suites and engines (Playwright, Selenium, Standard browser), then click **Run tests**. Press `Ctrl+C` to stop. If PowerShell blocks the activate script, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+
+### Command line
+
+```bash
+python -m agentic_browser list
+python -m agentic_browser run tasks/form-submission.json
+python -m agentic_browser run tasks/*.json --driver both          # Playwright + Selenium
+python -m agentic_browser run tasks/*.json --driver all           # + installed browser
+python -m agentic_browser run tasks/expense-workflow.json --headed
+python -m agentic_browser browsers
+```
+
+### Tests (no API key needed)
+
+```bash
+python -m agentic_browser.smoke          # all engines against the demo site
+python -m pytest python/tests            # agent loop with a scripted fake Claude client
+```
+
 ## Project layout
 
 ```
@@ -176,6 +230,7 @@ src/
   report/report.ts       HTML + JSON reports per run
   report/history.ts      sessions, session summary reports, history index
   tasks/schema.ts        task file validation (zod)
+python/                  Python implementation (see python/README.md)
 demo-site/               local target site (form, catalogue, workflow)
 tasks/                   example task specs
 ```

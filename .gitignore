@@ -1,3 +1,7 @@
 node_modules/
 runs/
 .env
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
